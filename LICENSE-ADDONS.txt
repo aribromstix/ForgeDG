@@ -1,0 +1,5 @@
+ForgeDG Add-on License (EULA)
+
+1. Applies only to the Webhook Connector module.
+2. Connector is licensed; no self-hosting or source access.
+3. Redistribution or reverse-engineering is prohibited.
