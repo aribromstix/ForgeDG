@@ -1,0 +1,16 @@
+- data: '2025-06-15'
+  etap: CI/CD i Docker gotowe
+  status: cat progress.yaml
+  uwagi: ''
+- data: '2025-06-15'
+  etap: CI/CD i Docker gotowe
+  status: success
+  uwagi: ''
+- data: '2025-06-15'
+  etap: 'Bootstrap: komendy załadowane'
+  status: success
+  uwagi: ''
+- data: '2025-06-15'
+  etap: Bez licencji
+  status: success
+  uwagi: ''

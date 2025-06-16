@@ -1,0 +1,426 @@
+import os
+import json
+import datetime
+import subprocess
+import click
+import re
+
+INDEX_FILE = os.path.join(os.getcwd(), 'index.json')
+
+@click.group()
+def cli():
+    pass
+
+@cli.command()
+def hello():
+    click.echo("Hello, ForgeDG!")
+
+@cli.command()
+@click.argument('nazwa')
+@click.option('--features', default='', help="Lista funkcji, np. login,api,db")
+def nowy_projekt(nazwa, features):
+    old_xml = os.path.join(os.getcwd(), nazwa, 'results.xml')
+    if os.path.exists(old_xml):
+        os.remove(old_xml)
+    proj_path = os.path.join(os.getcwd(), nazwa)
+    for sub in ['src', 'tests', 'docs']:
+        os.makedirs(os.path.join(proj_path, sub), exist_ok=True)
+    subprocess.run(['git', 'init'], cwd=proj_path, stdout=subprocess.DEVNULL)
+    feature_list = [f.strip() for f in features.split(',')] if features else []
+    meta = {
+        "name": nazwa,
+        "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "status": "in-progress",
+        "features": feature_list,
+        "metrics": {"users": 0, "errors": 0, "lastBuild": None}
+    }
+    with open(os.path.join(proj_path, 'metadata.json'), 'w') as f:
+        json.dump(meta, f, indent=2)
+    subprocess.run(['git', 'add', '.'], cwd=proj_path)
+    subprocess.run(['git', 'commit', '-m', 'Initial commit'], cwd=proj_path, stdout=subprocess.DEVNULL)
+    click.echo(f"Projekt '{nazwa}' utworzony z funkcjami {feature_list}. Initial commit gotowy.")
+    update_index(nazwa, proj_path, feature_list)
+
+@cli.command(name='zobacz-projekty')
+def zobacz_projekty():
+    if not os.path.exists(INDEX_FILE):
+        json.dump([], open(INDEX_FILE,'w'))
+    data = json.load(open(INDEX_FILE))
+    if not data:
+        click.echo("Brak projektów w index.json.")
+        return
+    click.echo("Lista projektów:")
+    for e in data:
+        click.echo(f"- {e['name']} | status: {e['status']} | utworzone: {e['created']} | features: {e['features']}")
+
+@cli.command()
+@click.argument('projekt')
+def dokumentuj(projekt):
+    docs_dir = os.path.join(os.getcwd(), projekt, 'docs')
+    raport_path = os.path.join(docs_dir, 'raport.md')
+    md_files = sorted([f for f in os.listdir(docs_dir) if f.endswith('.md')])
+    with open(raport_path, 'w') as f:
+        for fname in md_files:
+            f.write(f"# {fname}\n")
+            f.write(open(os.path.join(docs_dir, fname)).read() + "\n\n")
+    subprocess.run(['git', 'add', raport_path], cwd=os.path.join(os.getcwd(), projekt))
+    subprocess.run(['git', 'commit', '-m', f'Dodano raport etap {projekt}'], cwd=os.path.join(os.getcwd(), projekt), stdout=subprocess.DEVNULL)
+    click.echo(f"Raport zapisany w {raport_path} i zacommitowany.")
+
+@cli.command()
+@click.argument('etap')
+def podsumuj_etap(etap):
+    root = os.getcwd()
+    path1 = os.path.join(root, etap)
+    path2 = os.path.join(root, 'projects', etap)
+    if os.path.exists(path1):
+        proj_dir = path1
+    elif os.path.exists(path2):
+        proj_dir = path2
+    else:
+        click.echo(f"Projekt '{etap}' nie znaleziony.")
+        return
+    xml_path = os.path.join(proj_dir, 'results.xml')
+    subprocess.run(
+        ['pytest', '-q', 'tests', '--junitxml', xml_path, '-c', '/dev/null'],
+        cwd=proj_dir
+    )
+    text = open(xml_path).read()
+    total = text.count('<testcase ')
+    failures = text.count('<failure') + text.count('<error')
+    m = re.search(r'time="([0-9.]+)"', text)
+    time_val = float(m.group(1)) if m else 0.0
+    passed = total - failures
+    quality = round(passed/total*100,2) if total else 0
+    click.echo(f"[PODSUMOWANIE TESTÓW] projekt {etap}:")
+    click.echo(f"- Testów: {total}, zaliczone: {passed}, błędne: {failures}")
+    click.echo(f"- Czas: {time_val}s, jakość: {quality}%")
+    meta = json.load(open(os.path.join(proj_dir, 'metadata.json')))
+    c = len(meta.get('features', []))
+    est_hours = c * 2
+    vt = round((time_val/3600)*150,2)
+    vn = round(est_hours*150,2)
+    click.echo(f"- Wartość testów: {vt} PLN")
+    click.echo(f"- Prognoza pracy: {est_hours}h")
+    click.echo(f"- Wartość prognozowanej pracy: {vn} PLN")
+
+@cli.command(name='export-index')
+@click.argument('output', required=False)
+def export_index(output='projects.csv'):
+    import csv
+    if not os.path.exists(INDEX_FILE):
+        click.echo("Brak index.json do eksportu.")
+        return
+    data = json.load(open(INDEX_FILE))
+    with open(output, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['name','created','status','features','path'])
+        for e in data:
+            writer.writerow([
+                e.get('name',''),
+                e.get('created',''),
+                e.get('status',''),
+                ';'.join(e.get('features',[])),
+                e.get('path','')
+            ])
+    click.echo(f"Export indexu zapisany do {output}")
+
+@cli.command()
+@click.argument('projekt')
+def podsumuj_projekt(projekt):
+    root = os.getcwd()
+    proj_dir = os.path.join(root, projekt) if os.path.exists(os.path.join(root, projekt)) else os.path.join(root, 'projects', projekt)
+    meta = json.load(open(os.path.join(proj_dir, 'metadata.json')))
+    xml_path = os.path.join(proj_dir, 'results.xml')
+    if os.path.exists(xml_path):
+        text = open(xml_path).read()
+        total = text.count('<testcase ')
+        failures = text.count('<failure') + text.count('<error')
+        m = re.search(r'time="([0-9.]+)"', text)
+        time_val = float(m.group(1)) if m else 0.0
+        passed = total - failures
+        quality = round(passed/total*100,2) if total else 0
+    else:
+        total = failures = passed = quality = time_val = 0
+    features_count = len(meta.get('features', []))
+    est_hours = features_count * 2
+    rate = 150
+    value_tests = round((time_val/3600)*rate,2)
+    value_future = round(est_hours*rate,2)
+    click.echo(f"==== Podsumowanie projektu: {projekt} ====")
+    click.echo(f"Nazwa: {meta['name']}")
+    click.echo(f"Utworzony: {meta['created']}")  
+    click.echo(f"Status: {meta['status']}")  
+    click.echo(f"Funkcje: {meta['features']}")  
+    click.echo(f"-- TESTY --")  
+    click.echo(f"Testów: {total}, zaliczone: {passed}, błędne: {failures}")  
+    click.echo(f"Jakość testów: {quality}%")  
+    click.echo(f"Czas testów: {time_val}s (Wartość: {value_tests} PLN)")  
+    click.echo(f"-- PROGNOZA --")  
+    click.echo(f"Szacowany czas na rozwój: {est_hours}h (Wartość: {value_future} PLN)")  
+    click.echo("========================================")  
+
+def update_index(name,path,features):
+    data = []
+    if os.path.exists(INDEX_FILE):
+        data = json.load(open(INDEX_FILE))
+    data = [e for e in data if e['name'] != name]
+    data.append({
+        "name": name,
+        "created": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "status": "in-progress",
+        "features": features,
+        "path": path
+    })
+    open(INDEX_FILE,'w').write(json.dumps(data,indent=2))
+@cli.command(name='init-ci')
+@click.option('--provider', default='github', type=click.Choice(['github','gitlab']), help='CI provider')
+def init_ci(provider):
+    """Generuje plik CI workflow dla GitHub Actions lub GitLab CI."""
+    root = os.getcwd()
+    if provider == 'github':
+        path = os.path.join(root, '.github', 'workflows')
+        os.makedirs(path, exist_ok=True)
+        ci_file = os.path.join(path, 'ci.yml')
+        content = """name: CI
+on: [push]
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt
+          pip install -e .
+      - name: Run tests
+        run: pytest -q tests --junitxml=results.xml -c /dev/null
+"""
+    else:
+        path = os.path.join(root, '.gitlab')
+        os.makedirs(path, exist_ok=True)
+        ci_file = os.path.join(path, 'ci.yml')
+        content = """stages:
+  - test
+
+test:
+  image: python:3
+  script:
+    - pip install -r requirements.txt
+    - pip install -e .
+    - pytest -q tests --junitxml=results.xml -c /dev/null
+  only:
+    - branches
+"""
+    with open(ci_file, 'w') as f:
+        f.write(content)
+    click.echo(f'CI pipeline wygenerowany: {ci_file}')
+
+@cli.command(name='dockerize')
+@click.option('--base', default='python:3.12-slim', help='Podstawowy obraz Dockera')
+@click.option('--port', default=8080, help='Port aplikacji')
+def dockerize(base, port):
+    """Tworzy Dockerfile i docker-compose.yml."""
+    root = os.getcwd()
+    df = os.path.join(root, 'Dockerfile')
+    with open(df, 'w') as f:
+        f.write(f"""FROM {base}
+WORKDIR /app
+COPY . /app
+RUN pip install -e .
+CMD ["forge", "hello"]
+""")
+    dc = os.path.join(root, 'docker-compose.yml')
+    with open(dc, 'w') as f:
+        f.write(f"""version: '3'
+services:
+  app:
+    build: .
+    ports:
+      - "{port}:{port}"
+""")
+    click.echo('Dockerfile i docker-compose.yml wygenerowane.')
+@cli.command(name='init-progress')
+def init_progress():
+    """Utwórz pusty progress.yaml."""
+    import os, yaml
+    path = os.path.join(os.getcwd(), 'progress.yaml')
+    if os.path.exists(path):
+        click.echo('progress.yaml już istnieje.')
+        return
+    with open(path, 'w') as f:
+        yaml.safe_dump([], f, sort_keys=False, allow_unicode=True)
+    click.echo('Utworzono progress.yaml')
+
+@cli.command(name='log-progress')
+@click.argument('etap')
+def log_progress(etap):
+    """Dodaj wpis do progress.yaml."""
+    import os, yaml, datetime
+    path = os.path.join(os.getcwd(), 'progress.yaml')
+    if not os.path.exists(path):
+        click.echo('Brak progress.yaml. Uruchom: forge init-progress')
+        return
+    data = yaml.safe_load(open(path)) or []
+    entry = {
+        'data': str(datetime.date.today()),
+        'etap': etap,
+        'status': click.prompt('Status (success/fail)', default='success'),
+        'uwagi': click.prompt('Uwagi', default='')
+    }
+    data.append(entry)
+    with open(path, 'w') as f:
+        yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
+    click.echo('Zapisano wpis do progress.yaml')
+
+if __name__=='__main__':
+    cli()
+
+@cli.command(name='init-legal')
+def init_legal():
+    import os
+    os.makedirs('docs', exist_ok=True)
+    for name,txt in [('NDA.md','# NDA...'),('EULA.md','# EULA...')]:
+        path = os.path.join('docs',name)
+        if not os.path.exists(path):
+            open(path,'w').write(txt)
+    click.echo('Utworzono NDA/EULA')
+
+@cli.command(name='init-secrets')
+@click.argument('vars', required=False)
+def init_secrets(vars):
+    import os
+    defaults=['STRIPE_KEY=','GPT_KEY=']
+    with open('.env.example','w') as f:
+        for v in (vars.split(',') if vars else defaults):
+            f.write(v+'\\n')
+    open('.gitignore','a').write('\\n.env\\n')
+    click.echo('Utworzono .env.example i zaktualizowano .gitignore')
+
+# BEGIN LICENSE-CMD
+@cli.command(name='init-license')
+@click.option('--type','license_type',default='MIT')
+def init_license(license_type):
+    """Tworzy prosty plik LICENSE."""
+    import os
+    text = license_type + " License\\n(c) 2025 Adam Kaczorowski"
+    with open('LICENSE','w') as f:
+        f.write(text)
+    click.echo('Utworzono plik LICENSE')
+@cli.command(name='init-license')
+@click.option('--type','license_type',default='MIT')
+def init_license(license_type):
+    """Tworzy prosty plik LICENSE."""
+    import os
+    from datetime import datetime
+    year = datetime.now().year
+    # Wpisujemy prawdziwe odstępy linii
+    text = f"{license_type} License\n(c) {year} Adam Kaczorowski\n"
+    with open('LICENSE','w') as f:
+        f.write(text)
+    click.echo('Utworzono plik LICENSE')# END LICENSE-CMD
+# BEGIN AUTO-CMDS
+    @cli.command(name='dockerize')
+    @click.option('--base',default='python:3.12-slim')
+    @click.option('--port',default=8080)
+    def dockerize(base,port):
+        """Tworzy Dockerfile i docker-compose."""
+        import os
+        content=f"FROM {base}\nWORKDIR /app\nCOPY . /app\nRUN pip install -e .\nCMD [\"forge\",\"hello\"]\n"
+        open('Dockerfile','w').write(content)
+        dc="version: '3'\nservices:\n  app:\n    build: .\n    ports:\n      - \"{port}:{port}\"\n"
+        open('docker-compose.yml','w').write(dc)
+        click.echo('Dockerfile i docker-compose wygenerowane.')
+
+    @cli.command(name='init-ci')
+    @click.option('--provider', default='github', type=click.Choice(['github','gitlab']))
+    def init_ci(provider):
+        """Generuje plik CI workflow."""
+        import os
+        root = os.getcwd()
+        if provider=='github':
+            path=os.path.join(root,'.github/workflows'); os.makedirs(path,exist_ok=True)
+            content="name: CI\non: [push]\njobs:\n  build-and-test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v2\n      - name: Setup Python\n        uses: actions/setup-python@v2\n        with:\n          python-version: '3.x'\n      - name: Install deps\n        run: |\n          pip install -r requirements.txt\n          pip install -e .\n      - name: Run tests\n        run: pytest -q tests --junitxml=results.xml -c /dev/null\n"
+            open(os.path.join(path,'ci.yml'),'w').write(content)
+        else:
+            path=os.path.join(root,'.gitlab'); os.makedirs(path,exist_ok=True)
+            content="stages:\n  - test\n\ntest:\n  image: python:3\n  script:\n    - pip install -r requirements.txt\n    - pip install -e .\n    - pytest -q tests --junitxml=results.xml -c /dev/null\n  only:\n    - branches\n"
+            open(os.path.join(path,'ci.yml'),'w').write(content)
+        click.echo('CI pipeline wygenerowany.')
+
+    @cli.command(name='init-legal')
+    def init_legal():
+        """Tworzy NDA i EULA w docs/."""
+        import os
+        os.makedirs('docs',exist_ok=True)
+        open('docs/NDA.md','w').write('# NDA\\nUmowa o zachowaniu poufności...')
+        open('docs/EULA.md','w').write('# EULA\\nUmowa licencyjna...')
+        click.echo('Utworzono NDA i EULA')
+
+    @cli.command(name='init-progress')
+    def init_progress():
+        """Utwórz pusty progress.yaml."""
+        import os,yaml
+        if os.path.exists('progress.yaml'): click.echo('Już masz progress.yaml'); return
+        yaml.safe_dump([],open('progress.yaml','w'))
+        click.echo('Utworzono progress.yaml')
+
+    @cli.command(name='init-sales')
+    @click.option('--env-file', default='.env', help='Ścieżka do pliku z kluczami Stripe')
+    def init_sales(env_file):
+        """Generuje szkielet webhooka Stripe."""
+        import os
+        os.makedirs('sales', exist_ok=True)
+        handler = os.path.join('sales','webhook.js')
+        content = """\
+    // sales/webhook.js
+    const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    module.exports.handler = async (event) => {
+      // TODO: obsłuż checkout.session.completed
+      return { statusCode: 200, body: 'OK' };
+    };
+    """
+        with open(handler, 'w') as f:
+            f.write(content)
+        click.echo('Stworzono szkielet webhook: ' + handler)
+
+    @cli.command(name='init-secrets')
+    @click.argument('vars',required=False)
+    def init_secrets(vars):
+        """Generuje .env.example i .gitignore."""
+        import os
+        defaults=['STRIPE_KEY=','GPT_KEY=']
+        items=vars.split(',') if vars else defaults
+        open('.env.example','w').write('\\n'.join(items)+'\\n')
+        open('.gitignore','a').write('\\n.env\\n')
+        click.echo('Utworzono .env.example i .gitignore')
+
+    @cli.command(name='log-progress')
+    @click.argument('etap')
+    def log_progress(etap):
+        """Dodaj wpis do progress.yaml."""
+        import os,yaml,datetime
+        if not os.path.exists('progress.yaml'): click.echo('Brak progress.yaml'); return
+        data=yaml.safe_load(open('progress.yaml')) or []
+        entry={'data':str(datetime.date.today()),'etap':etap,
+               'status':click.prompt('Status',default='success'),
+               'uwagi':click.prompt('Uwagi',default='')}
+        data.append(entry)
+        yaml.safe_dump(data,open('progress.yaml','w'))
+        click.echo('Zapisano wpis')
+
+# END AUTO-CMDS
+
+@cli.command()
+@click.argument('prompt')
+@cli.command()
+@click.argument('prompt')
+@cli.command()
+@click.argument('prompt')
+
+@cli.command()
+@click.argument('prompt')

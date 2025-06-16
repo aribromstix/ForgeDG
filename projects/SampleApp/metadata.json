@@ -1,0 +1,14 @@
+{
+  "name": "SampleApp",
+  "created": "2025-06-13T22:08:27.168615+00:00",
+  "status": "in-progress",
+  "features": [
+    "alpha",
+    "beta"
+  ],
+  "metrics": {
+    "users": 0,
+    "errors": 0,
+    "lastBuild": null
+  }
+}

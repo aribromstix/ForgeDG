@@ -1,0 +1,14 @@
+{
+  "name": "FinalApp",
+  "created": "2025-06-14T19:29:56.582143+00:00",
+  "status": "in-progress",
+  "features": [
+    "f1",
+    "f2"
+  ],
+  "metrics": {
+    "users": 0,
+    "errors": 0,
+    "lastBuild": null
+  }
+}

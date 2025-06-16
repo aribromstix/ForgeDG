@@ -1,0 +1,22 @@
+[
+  {
+    "name": "SampleApp",
+    "created": "2025-06-13T22:08:27.173085+00:00",
+    "status": "in-progress",
+    "features": [
+      "alpha",
+      "beta"
+    ],
+    "path": "/home/adam-kaczorowski/Dev/ForgeDG/SampleApp"
+  },
+  {
+    "name": "FinalApp",
+    "created": "2025-06-14T20:20:44.851747+00:00",
+    "status": "in-progress",
+    "features": [
+      "f1",
+      "f2"
+    ],
+    "path": "/home/adam-kaczorowski/Dev/ForgeDG/FinalApp"
+  }
+]

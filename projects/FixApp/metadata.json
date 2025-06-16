@@ -1,0 +1,14 @@
+{
+  "name": "FixApp",
+  "created": "2025-06-13T21:54:32.129252+00:00",
+  "status": "in-progress",
+  "features": [
+    "test",
+    "ci"
+  ],
+  "metrics": {
+    "users": 0,
+    "errors": 0,
+    "lastBuild": null
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "TestApp",
+  "created": "2025-06-13T21:32:52.340527",
+  "status": "in-progress",
+  "features": [],
+  "metrics": {
+    "users": 0,
+    "errors": 0,
+    "lastBuild": null
+  }
+}

@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "forge-dg"
+version = "0.1.0"
+description = "ForgeDG – Dynamic Generator CLI"
+authors = [
+  { name="Adam Kaczorowski", email="adam.kaczorowski84@gmail.com" }
+]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = ["click", "pytest"]
+
+[project.scripts]
+forge = "cli:cli"

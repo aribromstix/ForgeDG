@@ -1,0 +1,13 @@
+LICENSE
+README.md
+cli.py
+pyproject.toml
+setup.py
+forge_dg.egg-info/PKG-INFO
+forge_dg.egg-info/SOURCES.txt
+forge_dg.egg-info/dependency_links.txt
+forge_dg.egg-info/entry_points.txt
+forge_dg.egg-info/requires.txt
+forge_dg.egg-info/top_level.txt
+projects/DemoApp/cli.py
+projects/SampleApp/tests/test_sample.py
