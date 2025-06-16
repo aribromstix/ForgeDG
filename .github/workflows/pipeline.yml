@@ -1,0 +1,33 @@
+name: Full ForgeDG Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with: python-version: '3.12'
+      - uses: actions/setup-node@v3
+        with: node-version: '18'
+      - name: Install dependencies
+        run: make deps
+      - name: Lint & Test
+        run: make lint test
+      - name: Commercial license & repo security
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make secure-repo commercial
+      - name: Setup Stripe product
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+        run: make setup-stripe
+      - name: Deploy landing page
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        run: make deploy
