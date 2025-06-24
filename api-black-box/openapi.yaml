@@ -1,0 +1,51 @@
+openapi: 3.0.1
+info:
+  title: FORGEDG Black-Box API
+  version: 1.0.0
+paths:
+  /process:
+    post:
+      summary: Uruchom przetwarzanie pliku
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fileUrl:
+                  type: string
+                  format: uri
+              required: [fileUrl]
+      responses:
+        '202':
+          description: Zadanie przyjęte
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+  /status:
+    get:
+      summary: Sprawdź status zadania
+      parameters:
+        - in: query
+          name: jobId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Status zadania
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId:
+                    type: string
+                  status:
+                    type: string
+                    enum: [queued, processing, done, error]

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <title>FORGEDG Web-Demo</title>
+</head>
+<body>
+  <h1>FORGEDG Web-Demo</h1>
+  <label>URL pliku: <input type="text" id="fileUrl" size="50" placeholder="https://example.com/data.csv"></label>
+  <button id="btnProcess">Przetwórz</button>
+  <pre id="output"></pre>
+
+  <script>
+    const API_BASE = 'http://localhost:5000';
+
+    document.getElementById('btnProcess').onclick = async () => {
+      const fileUrl = document.getElementById('fileUrl').value.trim();
+      if (!fileUrl) return alert('Podaj URL pliku');
+      document.getElementById('output').textContent = 'Wysyłanie…';
+
+      // 1) POST /process
+      const r1 = await fetch(`${API_BASE}/process`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({fileUrl})
+      });
+      if (r1.status !== 202) return document.getElementById('output').textContent = 'Błąd /process: ' + r1.status;
+      const j1 = await r1.json();
+      document.getElementById('output').textContent = 'jobId: ' + j1.jobId + '\\nStatus: queued';
+
+      // 2) GET /status po 1s
+      setTimeout(async () => {
+        const r2 = await fetch(`${API_BASE}/status?jobId=${j1.jobId}`);
+        const j2 = await r2.json();
+        document.getElementById('output').textContent += '\\nAktualny status: ' + j2.status;
+      }, 1000);
+    };
+  </script>
+</body>
+</html>
